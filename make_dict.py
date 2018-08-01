@@ -3,7 +3,7 @@ import json
 import regex
 from collections import Counter
 
-def make_dict(filepath, dictpath, min_freq=10):
+def make_dict(filepath, dictpath, min_freq=1):
 	text = codecs.open(filepath, 'r', 'utf-8').read().lower()
 	text = regex.sub("<.*>.*</.*>\n", "", text)
 	text = regex.sub("[^\s\p{Latin}']", "", text)

@@ -1,7 +1,3 @@
-"""
-Task 5 - Translation
-Demonstration of full Transformer model
-"""
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 import tensorflow as tf
@@ -32,13 +28,13 @@ flags.DEFINE_integer("print_every", 50, "Interval between printing loss")
 flags.DEFINE_integer("save_every", 50, "Interval between saving model")
 flags.DEFINE_string("savepath", "models/", "Path to save or load model")
 flags.DEFINE_integer("batchsize", 64, "Training batchsize per step")
-flags.DEFINE_float("lr", 1e-4, "Learning rate")
+flags.DEFINE_float("lr", 1e-3, "Learning rate")
 
 # Model parameters
 flags.DEFINE_integer("heads", 4, "Number of heads for multihead attention")
 flags.DEFINE_integer("enc_layers", 1, "Number of self-attention layers for encodings")
 flags.DEFINE_integer("dec_layers", 6, "Number of self-attention layers for encodings")
-flags.DEFINE_integer("hidden", 128, "Hidden dimension in model")
+flags.DEFINE_integer("hidden", 256, "Hidden dimension in model")
 
 # Task parameters
 flags.DEFINE_integer("max_len", 20, "Maximum input length from toy task")
@@ -48,14 +44,14 @@ flags.DEFINE_integer("line", None, "Line to test")
 class MockTask(object):
 
 	def __init__(self):
-		self.en_file = "data/train.tags.de-en.en"
+		self.en_file = "data/tiny_shakespeare.txt"
 		self.rand_en = np.random.RandomState(1)
-		self.en_dict = json.load(open("data/en_dict.json", 'r', encoding='utf-8'))
+		self.en_dict = json.load(open("data/tiny_shakespeare_dict.json", 'r', encoding='utf-8'))
 		self.en_vocab_size = len(self.en_dict)
 		self.idx = 0
 
 	def embed(self, sample, dictionary, max_len=20, sos=False, eos=False):
-		sample = sample.split()[:max_len]
+		sample = list(sample)[:max_len]
 		while len(sample) < max_len:
 			sample.append('<PAD>')
 		if sos:
@@ -67,10 +63,7 @@ class MockTask(object):
 			tokens.append('<PAD>')
 		idxs = []
 		for token in tokens:
-			try:
-				idxs.append(dictionary.index(token))
-			except:
-				idxs.append(dictionary.index('<UNK>'))
+			idxs.append(dictionary.index(token))
 		idxs = np.array(idxs)
 		return np.eye(len(dictionary))[idxs]
 
@@ -83,36 +76,34 @@ class MockTask(object):
 			idxs = np.array(idxs)
 		else:
 			idxs = np.argmax(sample, axis=1)
-		return " ".join(np.array(dictionary)[idxs])
+		return "".join(np.array(dictionary)[idxs])
 
 class Task(object):
 	
 	def __init__(self):
-		self.en_file = "data/train.tags.de-en.en"
+		self.en_file = "data/tiny_shakespeare.txt"
 		self.en_samples = self.get_samples(self.en_file)
 		self.rand_en = np.random.RandomState(1)
 		self.n_samples = len(self.en_samples)
-		self.en_dict = json.load(open("data/en_dict.json", 'r', encoding='utf-8'))
+		self.en_dict = json.load(open("data/tiny_shakespeare_dict.json", 'r', encoding='utf-8'))
 		self.en_vocab_size = len(self.en_dict)
 		self.idx = 0
 
 	def get_samples(self, file):
 		text = codecs.open(file, 'r', 'utf-8').read().lower()
-		text = regex.sub("<.*>.*</.*>\r", "", text)
-		text = regex.sub("<.*>.*</.*>\n", "", text)
-		text = regex.sub("[^\n\s\p{Latin}']", "", text)
-		# samples = text.split('\n')
-		# return samples
-		samples = ' '.join(text.split('\n')).split()
+		text = text.replace('\n', ' ')
 		sequences = []
-		for i in range(2048):
+		for i in range(10000):
 			start = i * (FLAGS.max_len + 1)
-			sequence = ' '.join(samples[start:start+FLAGS.max_len+1])
-			sequences.append(sequence)
+			if start+FLAGS.max_len+1 > len(text):
+				print('length exceeded')
+				quit()
+			sequence = text[start:start+FLAGS.max_len+1]
+			sequences.append(list(sequence))
 		return sequences
 
 	def embed(self, sample, dictionary, max_len=20, sos=False, eos=False):
-		sample = sample.split()[:max_len]
+		sample = sample[:max_len]
 		while len(sample) < max_len:
 			sample.append('<PAD>')
 		if sos:
@@ -124,10 +115,7 @@ class Task(object):
 			tokens.append('<PAD>')
 		idxs = []
 		for token in tokens:
-			try:
-				idxs.append(dictionary.index(token))
-			except:
-				idxs.append(dictionary.index('<UNK>'))
+			idxs.append(dictionary.index(token))
 		idxs = np.array(idxs)
 		return np.eye(len(dictionary))[idxs]
 
@@ -147,10 +135,6 @@ class Task(object):
 		en_minibatch_in = []
 		en_minibatch_out = []
 		for sample in en_minibatch_text:
-			if '<PAD>' in self.prettify(self.embed(sample, self.en_dict, max_len=max_len+1, eos=True)[:-1], self.en_dict):
-				print([sample])
-				print([self.prettify(self.embed(sample, self.en_dict, max_len=max_len+1, eos=True)[:-1], self.en_dict)])
-				quit()
 			en_minibatch_in.append(self.embed(sample, self.en_dict, max_len=max_len+1, sos=True)[:-1])
 			en_minibatch_out.append(self.embed(sample, self.en_dict, max_len=max_len+1, eos=True)[:-1])
 		return np.array(en_minibatch_in), np.array(en_minibatch_out)
@@ -164,7 +148,7 @@ class Task(object):
 			idxs = np.array(idxs)
 		else:
 			idxs = np.argmax(sample, axis=1)
-		return " ".join(np.array(dictionary)[idxs])
+		return "".join(np.array(dictionary)[idxs])
 
 
 class AttentionModel(object):
@@ -372,7 +356,7 @@ def main(unused_args):
 					model.input: [task.embed(output, task.en_dict, max_len=FLAGS.max_len, sos=True)]
 				}
 				distribution = sess.run(model.softmax, feed_dict)
-				output += " " + task.prettify(distribution[0], task.en_dict, probabilistic=True).split()[i]
+				output += task.prettify(distribution[0], task.en_dict, probabilistic=True)[i]
 			print("\nOutput: \n{}".format(output))
 
 	elif FLAGS.eval:
