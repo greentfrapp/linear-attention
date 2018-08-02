@@ -11,6 +11,7 @@ from absl import app
 import seaborn
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from datetime import datetime
 
 FLAGS = flags.FLAGS
 
@@ -37,7 +38,7 @@ flags.DEFINE_integer("dec_layers", 6, "Number of self-attention layers for encod
 flags.DEFINE_integer("hidden", 256, "Hidden dimension in model")
 
 # Task parameters
-flags.DEFINE_integer("max_len", 20, "Maximum input length from toy task")
+flags.DEFINE_integer("max_len", 50, "Maximum input length from toy task")
 flags.DEFINE_integer("line", None, "Line to test")
 
 
@@ -93,7 +94,7 @@ class Task(object):
 		text = codecs.open(file, 'r', 'utf-8').read().lower()
 		text = text.replace('\n', ' ')
 		sequences = []
-		for i in range(10000):
+		for i in range(64):
 			start = i * (FLAGS.max_len + 1)
 			if start+FLAGS.max_len+1 > len(text):
 				print('length exceeded')
@@ -317,12 +318,13 @@ def main(unused_args):
 				dec_layers=FLAGS.dec_layers,
 				learning_rate=FLAGS.lr,
 			)
+			sess.run(tf.global_variables_initializer())
 			if FLAGS.load:
 				ckpt = model.load(FLAGS.savepath)
 				step = int(ckpt.split("ckpt-")[-1]) + 1
 			else:
-				sess.run(tf.global_variables_initializer())
 				step = 1
+			start = datetime.now()
 			for i in np.arange(FLAGS.steps):
 				minibatch_dec_in, minibatch_dec_out = task.next_batch(batchsize=FLAGS.batchsize, max_len=FLAGS.max_len)
 				feed_dict = {
@@ -333,7 +335,9 @@ def main(unused_args):
 				if (i + step) % FLAGS.save_every == 0:
 					model.save(FLAGS.savepath, global_step=i + step)
 				if (i + step) % FLAGS.print_every == 0:
-					print("Iteration {} - Loss {:.3f}".format(i + step, loss))
+					time = datetime.now() - start
+					print("Iteration {} - Loss {:.3f} - Time {}".format(i + step, loss, time))
+					start = datetime.now()
 			print("Iteration {} - Loss {:.3f}".format(i + step, loss))
 			print("Training complete!")
 			model.save(FLAGS.savepath, global_step=i + step, verbose=True)
@@ -372,17 +376,19 @@ def main(unused_args):
 			)
 			model.load(FLAGS.savepath)
 			# dec_in, dec_out = task.next_batch(batchsize=1, max_len=FLAGS.max_len, idx=FLAGS.line)
-			sentence = "them by color and put them on"
+			sentence = "rather to die than to famish"
 			feed_dict = {
 				model.input: [task.embed(sentence, task.en_dict, max_len=FLAGS.max_len+1, sos=True)[:-1]]
 				# model.input: dec_in,
 			}
 			distribution = sess.run(model.softmax, feed_dict)
 			probabilities = distribution * task.embed(sentence, task.en_dict, max_len=FLAGS.max_len+1, sos=True)[1:]
-			probabilities = probabilities[:, :len(sentence.split()), :]
-			nll = -np.sum(np.log(np.sum(probabilities, axis=2)[0])) / len(sentence.split())
+			probabilities = probabilities[:, :len(sentence), :]
+			print(len(sentence))
+			print(probabilities.shape)
+			nll = -np.sum(np.log(np.sum(probabilities, axis=2)[0])) / len(sentence)
 			print(nll)
-			print(task.prettify(distribution[0], task.en_dict))
+			print(task.prettify(distribution[0, :len(sentence), :], task.en_dict))
 
 	elif FLAGS.test:
 		with tf.Session() as sess:
