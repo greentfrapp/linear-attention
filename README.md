@@ -7,4 +7,4 @@ linear-attention
 
 Notes:
 
-Go through this [paper](https://arxiv.org/abs/1808.04444) by Al-Rfou et al. (2018) on character-level language modeling with very deep (64-layer) Transformers.
+Go through this [paper](https://arxiv.org/abs/1808.04444) by Al-Rfou et al. (2018) on character-level language modeling with very deep (64-layer) Transformers. Dataset Links: [text8](http://mattmahoney.net/dc/text8.zip) [enwiki8](http://mattmahoney.net/dc/enwik8.zip)
