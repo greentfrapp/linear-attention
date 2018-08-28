@@ -29,7 +29,7 @@ flags.DEFINE_integer("print_every", 50, "Interval between printing loss")
 flags.DEFINE_integer("save_every", 50, "Interval between saving model")
 flags.DEFINE_string("savepath", "models/", "Path to save or load model")
 flags.DEFINE_integer("batchsize", 64, "Training batchsize per step")
-flags.DEFINE_float("lr", 1e-3, "Learning rate")
+flags.DEFINE_float("lr", 1e-4, "Learning rate")
 
 # Model parameters
 flags.DEFINE_integer("heads", 4, "Number of heads for multihead attention")
@@ -38,8 +38,11 @@ flags.DEFINE_integer("dec_layers", 6, "Number of self-attention layers for encod
 flags.DEFINE_integer("hidden", 256, "Hidden dimension in model")
 
 # Task parameters
-flags.DEFINE_integer("max_len", 50, "Maximum input length from toy task")
+flags.DEFINE_integer("max_len", 100, "Maximum input length from toy task")
 flags.DEFINE_integer("line", None, "Line to test")
+
+# Eval parameters
+flags.DEFINE_string("input", None, "Input to evaluate")
 
 
 class MockTask(object):
@@ -202,7 +205,7 @@ class AttentionModel(object):
 
 		for i in np.arange(self.dec_layers):
 			# Decoder Self-Attention
-			embedding, _ = self.attention(
+			embedding, _ = self.linear_attention(
 				query=embedding,
 				key=embedding,
 				value=embedding,
@@ -236,6 +239,20 @@ class AttentionModel(object):
 		self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=self.labels, logits=self.logits))
 		# self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=tf.expand_dims(self.labels[:, -1], axis=0), logits=tf.expand_dims(self.logits[:, -1], axis=0)))
 		self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
+
+	def linear_attention(self, query, key, value, mask=False):
+		query = tf.nn.l2_normalize(query, dim=-1)
+		key = tf.nn.l2_normalize(key, dim=-1)
+		output = tf.matmul(query, key, transpose_b=True)# / (tf.cast(tf.shape(query)[2], tf.float32) ** 0.5)
+		# attention_weights = tf.nn.softmax(output)
+		attention_weights = output
+		if mask:
+			attention_weights = tf.matrix_band_part(attention_weights, -1, 0)
+			# attention_weights /= tf.reduce_sum(attention_weights, axis=2, keep_dims=True)
+		weighted_sum = tf.matmul(attention_weights, value)
+		output = weighted_sum + query
+		output = tf.contrib.layers.layer_norm(output, begin_norm_axis=2)
+		return output, attention_weights
 
 	def attention(self, query, key, value, mask=False):
 		output = tf.matmul(query, key, transpose_b=True) / (tf.cast(tf.shape(query)[2], tf.float32) ** 0.5)
@@ -354,13 +371,14 @@ def main(unused_args):
 				learning_rate=FLAGS.lr,
 			)
 			model.load(FLAGS.savepath)
-			output = ""
-			for i in np.arange(FLAGS.max_len):
+			output = "can forc"
+			intial_len = len(output)
+			for i in np.arange(FLAGS.max_len - intial_len):
 				feed_dict = {
 					model.input: [task.embed(output, task.en_dict, max_len=FLAGS.max_len, sos=True)]
 				}
 				distribution = sess.run(model.softmax, feed_dict)
-				output += task.prettify(distribution[0], task.en_dict, probabilistic=True)[i]
+				output += task.prettify(distribution[0], task.en_dict, probabilistic=True)[i + intial_len]
 			print("\nOutput: \n{}".format(output))
 
 	elif FLAGS.eval:
@@ -376,7 +394,7 @@ def main(unused_args):
 			)
 			model.load(FLAGS.savepath)
 			# dec_in, dec_out = task.next_batch(batchsize=1, max_len=FLAGS.max_len, idx=FLAGS.line)
-			sentence = "rather to die than to famish"
+			sentence = FLAGS.input or "rather to die than to famise"
 			feed_dict = {
 				model.input: [task.embed(sentence, task.en_dict, max_len=FLAGS.max_len+1, sos=True)[:-1]]
 				# model.input: dec_in,
