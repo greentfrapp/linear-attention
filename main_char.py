@@ -204,6 +204,7 @@ class AttentionModel(object):
 		embedding = input_emb + pos_enc
 
 		for i in np.arange(self.dec_layers):
+			embedding = tf.nn.l2_normalize(embedding, dim=-1)
 			# Decoder Self-Attention
 			embedding, _ = self.linear_attention(
 				query=embedding,
@@ -241,14 +242,14 @@ class AttentionModel(object):
 		self.optimize = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss)
 
 	def linear_attention(self, query, key, value, mask=False):
-		query = tf.nn.l2_normalize(query, dim=-1)
-		key = tf.nn.l2_normalize(key, dim=-1)
 		output = tf.matmul(query, key, transpose_b=True)# / (tf.cast(tf.shape(query)[2], tf.float32) ** 0.5)
 		# attention_weights = tf.nn.softmax(output)
+		# attention_weights = tf.nn.relu(output)
 		attention_weights = output
 		if mask:
 			attention_weights = tf.matrix_band_part(attention_weights, -1, 0)
 			# attention_weights /= tf.reduce_sum(attention_weights, axis=2, keep_dims=True)
+			attention_weights /= tf.reduce_sum(tf.matrix_band_part(tf.ones_like(attention_weights), -1, 0), axis=2, keep_dims=True)
 		weighted_sum = tf.matmul(attention_weights, value)
 		output = weighted_sum + query
 		output = tf.contrib.layers.layer_norm(output, begin_norm_axis=2)
