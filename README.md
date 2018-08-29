@@ -30,3 +30,5 @@ It is much clearer when we see Equation 1 in the context of Equation 2. The last
 **Notes on Requests for Research:**
 
 The context given by the Request seems to be to use the Transformer architecture as a way of embedding the history of observations. My guess is that the intention is to set the history of observations as keys/values with the current observation being the query. Given a long history, the Transformer architecture would not be tenable but the Transformer coupled with Linear Attention would be far more tractable.
+
+Also see Section 4.4 of fast weights paper.
